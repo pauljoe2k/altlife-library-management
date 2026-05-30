@@ -100,6 +100,7 @@ altlife-library-management/
 ├── docker-compose.yml      # Multi-container orchestration pipelines
 ├── package.json            # Application scripts and packages manifest
 └── package-lock.json       # Strict package lock manifest
+└── Validation.docx         # Validation document
 ```
 
 ---
