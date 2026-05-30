@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: library
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d library"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+      - "5555:5555"
+    env_file:
+      - .env
+    command: >
+      sh -c "
+      echo '[DevOps] Waiting for PostgreSQL database container...';
+      until pg_isready -h db -p 5432 -U postgres; do
+        sleep 1;
+      done;
+      echo '[DevOps] Database is online. Aligning schema with Prisma (db push)...';
+      npx prisma db push;
+      echo '[DevOps] Running idempotent database seeder...';
+      npx prisma db seed;
+      echo '[DevOps] Database setup complete. Starting Express application...';
+      npm run dev;
+      "
+
+volumes:
+  pgdata:

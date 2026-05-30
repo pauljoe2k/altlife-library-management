@@ -1,0 +1,38 @@
+{
+  "name": "altlife-library-management",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pauljoe2k/altlife-library-management.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pauljoe2k/altlife-library-management/issues"
+  },
+  "homepage": "https://github.com/pauljoe2k/altlife-library-management#readme",
+  "description": "DevOps-focused Library Management System backend",
+  "dependencies": {
+    "@prisma/client": "^6.8.2",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "joi": "^18.2.1",
+    "morgan": "^1.10.1",
+    "prisma": "^6.8.2",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
