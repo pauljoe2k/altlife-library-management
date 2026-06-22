@@ -1,0 +1,790 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Alt Life Labs - Library Management System API",
+    "description": "A production-grade, highly secure, and DevOps-optimized REST API for managing books, library members, and borrowing issuances.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Alt Life Labs Support",
+      "url": "https://github.com/pauljoe2k/altlife-library-management"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Header-based API key access. Requires the value specified in your server configuration (e.g. 'your-secret-key')."
+      }
+    },
+    "schemas": {
+      "Book": {
+        "type": "object",
+        "properties": {
+          "bookId": { "type": "integer", "example": 1 },
+          "title": { "type": "string", "example": "The Phoenix Project" },
+          "author": { "type": "string", "example": "Gene Kim" },
+          "isbn": { "type": "string", "nullable": true, "example": null },
+          "totalCopies": { "type": "integer", "nullable": true, "example": null }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "memberId": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "John Doe" },
+          "email": { "type": "string", "format": "email", "example": "john.doe@example.com" },
+          "phone": { "type": "string", "nullable": true, "example": "+1-555-0199" }
+        }
+      },
+      "Issuance": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "memberId": { "type": "integer", "example": 1 },
+          "bookId": { "type": "integer", "example": 1 },
+          "issuedAt": { "type": "string", "format": "date-time", "example": "2026-05-27T00:15:00.000Z" },
+          "dueDate": { "type": "string", "format": "date-time", "example": "2026-06-10T00:00:00.000Z" },
+          "status": { "type": "string", "enum": ["Issued", "Returned"], "example": "Issued" },
+          "member": { "$ref": "#/components/schemas/Member" },
+          "book": { "$ref": "#/components/schemas/Book" }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "fail" },
+          "error": { "type": "string", "example": "Validation Error" },
+          "message": { "type": "string", "example": "Invalid input data provided" },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string", "example": "email" },
+                "message": { "type": "string", "example": "\"email\" must be a valid email" }
+              }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "fail" },
+          "error": { "type": "string", "example": "NotFoundError" },
+          "message": { "type": "string", "example": "Requested record not found" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Check API and Database Health",
+        "description": "Verifies the Express application is running and runs a test query against the PostgreSQL database to confirm complete operational readiness.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Operational Status Complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "OK" },
+                    "timestamp": { "type": "string", "example": "2026-05-27T00:15:00.000Z" },
+                    "database": { "type": "string", "example": "connected" }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable (Database Connection Failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ERROR" },
+                    "timestamp": { "type": "string", "example": "2026-05-27T00:15:00.000Z" },
+                    "database": { "type": "string", "example": "disconnected" },
+                    "error": { "type": "string", "example": "Can't reach database server" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/books": {
+      "get": {
+        "summary": "List all Books",
+        "description": "Retrieve all books from the library inventory.",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved list of books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "results": { "type": "integer", "example": 1 },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Book" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new Book",
+        "description": "Register a new book in the library system. Unique ISBN is enforced.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "author", "isbn"],
+                "properties": {
+                  "title": { "type": "string", "example": "The Phoenix Project" },
+                  "author": { "type": "string", "example": "Gene Kim" },
+                  "isbn": { "type": "string", "example": "978-0988262591" },
+                  "totalCopies": { "type": "integer", "default": 1, "example": 5 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Book created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Book created successfully" },
+                    "data": { "$ref": "#/components/schemas/Book" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or ISBN unique violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/ValidationError" },
+                    { "$ref": "#/components/schemas/ErrorResponse" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/books/{id}": {
+      "get": {
+        "summary": "Get Book by ID",
+        "description": "Retrieve specific book details by its integer database ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book details retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": { "$ref": "#/components/schemas/Book" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Book not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Book by ID",
+        "description": "Modify existing book details. Allows partial modifications.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "example": "The Unicorn Project" },
+                  "totalCopies": { "type": "integer", "example": 7 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Book updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Book updated successfully" },
+                    "data": { "$ref": "#/components/schemas/Book" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationError" }
+              }
+            }
+          },
+          "404": {
+            "description": "Book not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Book by ID",
+        "description": "Removes a book from library records. Blocks deletion if there are outstanding/unreturned copies currently issued to members.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Book deleted successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot delete book with active borrows",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Book not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/members": {
+      "get": {
+        "summary": "List all Members",
+        "description": "Retrieve all registered library members.",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved list of members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "results": { "type": "integer", "example": 1 },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Member" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a new Member",
+        "description": "Create a new library member. Unique email constraint is enforced.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email"],
+                "properties": {
+                  "name": { "type": "string", "example": "John Doe" },
+                  "email": { "type": "string", "format": "email", "example": "john.doe@example.com" },
+                  "phone": { "type": "string", "example": "+1-555-0199" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Member created successfully" },
+                    "data": { "$ref": "#/components/schemas/Member" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or email uniqueness failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/ValidationError" },
+                    { "$ref": "#/components/schemas/ErrorResponse" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/members/{id}": {
+      "get": {
+        "summary": "Get Member by ID",
+        "description": "Retrieve specific member details by database ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member details retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": { "$ref": "#/components/schemas/Member" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Member not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Member by ID",
+        "description": "Modify existing member details. Allows partial modifications.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": { "type": "string", "example": "+1-555-9988" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Member updated successfully" },
+                    "data": { "$ref": "#/components/schemas/Member" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationError" }
+              }
+            }
+          },
+          "404": {
+            "description": "Member not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Member by ID",
+        "description": "Removes a member from library database. Blocks deletion if the member currently has outstanding unreturned books.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Member deleted successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot delete member with active borrowings",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Member not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issuances": {
+      "get": {
+        "summary": "List all Issuances",
+        "description": "Retrieve all records of issued books, including the associated member and book relationships.",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved list of issuances",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "results": { "type": "integer", "example": 1 },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          { "$ref": "#/components/schemas/Issuance" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "member": { "$ref": "#/components/schemas/Member" },
+                              "book": { "$ref": "#/components/schemas/Book" }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Issue a Book to a Member",
+        "description": "Register a new borrowing operation. Enforces database verification checks: member must exist, book must exist, and book must have copies available in stock.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["memberId", "bookId", "dueDate"],
+                "properties": {
+                  "memberId": { "type": "integer", "example": 1 },
+                  "bookId": { "type": "integer", "example": 1 },
+                  "dueDate": { "type": "string", "format": "date-time", "example": "2026-06-15T00:00:00.000Z" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Book successfully issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Book issued successfully" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Issuance" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "member": { "$ref": "#/components/schemas/Member" },
+                            "book": { "$ref": "#/components/schemas/Book" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed, or book out of stock",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/ValidationError" },
+                    { "$ref": "#/components/schemas/ErrorResponse" }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Book or Member not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issuances/{id}": {
+      "get": {
+        "summary": "Get Issuance Record by ID",
+        "description": "Retrieve specific borrowing operation by database ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issuance record retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Issuance" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "member": { "$ref": "#/components/schemas/Member" },
+                            "book": { "$ref": "#/components/schemas/Book" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issuance record not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issuances/{id}/return": {
+      "put": {
+        "summary": "Return an Issued Book",
+        "description": "Register book return. Updates status to 'Returned'. Blocks duplicate returns (i.e. returning a book twice).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book successfully returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Book returned successfully" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Issuance" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "member": { "$ref": "#/components/schemas/Member" },
+                            "book": { "$ref": "#/components/schemas/Book" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Duplicate return (book already returned)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Issuance record not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
